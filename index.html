@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Whiteboard</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #111;
+    }
+
+    canvas {
+      background: white;
+      display: block;
+      touch-action: none;
+    }
+
+    #toolbar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #222;
+      padding: 15px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      z-index: 10;
+    }
+
+    .tool-btn {
+      background: #444;
+      color: white;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .tool-btn:hover {
+      background: #00ff99;
+      color: black;
+    }
+
+    input[type="range"] {
+      width: 100px;
+    }
+
+    #canvasWrapper {
+      width: 100%;
+      height: calc(100% - 100px);
+    }
+  </style>
+</head>
+<body>
+  <div id="canvasWrapper">
+    <canvas id="board"></canvas>
+  </div>
+
+  <div id="toolbar">
+    <button class="tool-btn" onclick="setTool('draw')">✏️ Draw</button>
+    <button class="tool-btn" onclick="setTool('erase')">🧽 Erase</button>
+    <label class="tool-btn">Size
+      <input type="range" min="1" max="50" value="5" id="sizeSlider">
+    </label>
+    <input type="color" id="colorPicker" class="tool-btn">
+    <button class="tool-btn" onclick="undo()">↩️ Undo</button>
+    <button class="tool-btn" onclick="redo()">↪️ Redo</button>
+    <button class="tool-btn" onclick="clearBoard()">🗑️ Clear</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('board');
+    const ctx = canvas.getContext('2d');
+    const sizeSlider = document.getElementById('sizeSlider');
+    const colorPicker = document.getElementById('colorPicker');
+
+    let drawing = false;
+    let tool = 'draw';
+    let currentColor = '#000000';
+    let brushSize = 5;
+    let paths = [];
+    let redoStack = [];
+    let currentPath = [];
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight - document.getElementById('toolbar').offsetHeight;
+      redraw();
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function startDraw(x, y) {
+      drawing = true;
+      currentPath = [{ x, y, color: currentColor, size: brushSize, erase: tool === 'erase' }];
+    }
+
+    function draw(x, y) {
+      if (!drawing) return;
+
+      const point = { x, y, color: currentColor, size: brushSize, erase: tool === 'erase' };
+      currentPath.push(point);
+      ctx.beginPath();
+      const prev = currentPath[currentPath.length - 2];
+      ctx.moveTo(prev.x, prev.y);
+      ctx.lineTo(point.x, point.y);
+      ctx.strokeStyle = point.erase ? "#ffffff" : point.color;
+      ctx.lineWidth = point.size;
+      ctx.lineCap = "round";
+      ctx.stroke();
+    }
+
+    function stopDraw() {
+      if (drawing) {
+        paths.push(currentPath);
+        redoStack = [];
+      }
+      drawing = false;
+    }
+
+    canvas.addEventListener('mousedown', e => startDraw(e.offsetX, e.offsetY));
+    canvas.addEventListener('mousemove', e => draw(e.offsetX, e.offsetY));
+    canvas.addEventListener('mouseup', stopDraw);
+    canvas.addEventListener('mouseout', stopDraw);
+
+    canvas.addEventListener('touchstart', e => {
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      startDraw(touch.clientX - rect.left, touch.clientY - rect.top);
+    });
+
+    canvas.addEventListener('touchmove', e => {
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      draw(touch.clientX - rect.left, touch.clientY - rect.top);
+    });
+
+    canvas.addEventListener('touchend', stopDraw);
+
+    function setTool(selected) {
+      tool = selected;
+    }
+
+    sizeSlider.addEventListener('input', () => {
+      brushSize = sizeSlider.value;
+    });
+
+    colorPicker.addEventListener('input', () => {
+      currentColor = colorPicker.value;
+    });
+
+    function clearBoard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      paths = [];
+      redoStack = [];
+    }
+
+    function undo() {
+      if (paths.length === 0) return;
+      const last = paths.pop();
+      redoStack.push(last);
+      redraw();
+    }
+
+    function redo() {
+      if (redoStack.length === 0) return;
+      const redoPath = redoStack.pop();
+      paths.push(redoPath);
+      redraw();
+    }
+
+    function redraw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const path of paths) {
+        for (let i = 1; i < path.length; i++) {
+          ctx.beginPath();
+          ctx.moveTo(path[i - 1].x, path[i - 1].y);
+          ctx.lineTo(path[i].x, path[i].y);
+          ctx.strokeStyle = path[i].erase ? "#ffffff" : path[i].color;
+          ctx.lineWidth = path[i].size;
+          ctx.lineCap = "round";
+          ctx.stroke();
+        }
+      }
+    }
+  </script>
+</body>
+</html>
